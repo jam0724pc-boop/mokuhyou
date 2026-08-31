@@ -245,6 +245,26 @@
   }
   .board-item img{ width:100%; height:90px; object-fit:contain; border-radius:10px; pointer-events:none; }
   .board-item .label{ margin-top:4px; font-size:14px; font-weight:bold; pointer-events:none; }
+  .board-item-delete{
+    position: absolute;
+    top: -8px; right: -8px;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 3px solid #fff;
+    background: var(--color-danger);
+    color: #fff;
+    font-size: 16px;
+    font-weight: bold;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.15);
+    z-index: 2;
+  }
+  .board-item-delete:active{ transform: scale(0.9); }
+  .board-item.locked .board-item-delete{ display: none; } /* ロック中は けせない */
   .board-item.locked{ cursor: default; }
 
   /* ============================================================
@@ -394,7 +414,9 @@
     box-shadow: 0 0 0 6px var(--color-safe), 0 5px 0 #DDD0BE;
     transform: scale(1.05);
   }
+  #sel-display-buttons{ display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; }
   #sel-next-btn{ background: var(--color-safe); }
+  #sel-flow-btn{ background: var(--color-accent); }
 
   /* ============================================================
      ▼ かくにん モーダル
@@ -519,7 +541,10 @@
     <!-- ③ えらんだ イラストだけを おおきく ひょうじする がめん -->
     <div id="sel-display-view" class="hidden-mode">
       <div id="sel-display-grid"></div>
-      <button id="sel-next-btn" class="big-btn">🔁 つぎの もんだいへ</button>
+      <div id="sel-display-buttons">
+        <button id="sel-flow-btn" class="big-btn">🎯 がっきの もくひょうへ</button>
+        <button id="sel-next-btn" class="big-btn">🔁 つぎの もんだいへ</button>
+      </div>
     </div>
 
   </div>
@@ -685,9 +710,14 @@ function addToBoard(item, category){
   const card = document.createElement("div");
   card.className = "board-item";
   card.innerHTML = `
+    <button class="board-item-delete" aria-label="けす">×</button>
     <img src="${item.img}" alt="${item.name}">
     <div class="label">${item.name}</div>
   `;
+  card.querySelector(".board-item-delete").addEventListener("click", (e) => {
+    e.stopPropagation();
+    askDelete(card);
+  });
   card.addEventListener("click", () => askDelete(card));
   targetBoard.appendChild(card);
 }
@@ -747,18 +777,19 @@ const selSeikatsuGrid  = document.getElementById("sel-seikatsu-grid");
 const selKyoukaStrip   = document.getElementById("sel-kyouka-strip");
 const selDisplayGrid   = document.getElementById("sel-display-grid");
 const selNextBtn       = document.getElementById("sel-next-btn");
+const selFlowBtn       = document.getElementById("sel-flow-btn");
 
 let selTargetCount = 0;      // なんたくか（2・3・4）
 let selChosenItems = [];     // えらんだ イラストの はいれつ
 let selCurrentStage = "seikatsu1";
 
 /* きょうか もくひょう：じょうじ表示 */
-GOAL_ITEMS.kyouka.forEach(item => selKyoukaStrip.appendChild(makeSelPaletteCard(item)));
+GOAL_ITEMS.kyouka.forEach(item => { item.category = "gakushu"; selKyoukaStrip.appendChild(makeSelPaletteCard(item)); });
 
 /* せいかつ もくひょう：タブに おうじて はりかえ */
 function renderSelSeikatsuGrid(stage){
   selSeikatsuGrid.innerHTML = "";
-  GOAL_ITEMS[stage].forEach(item => selSeikatsuGrid.appendChild(makeSelPaletteCard(item)));
+  GOAL_ITEMS[stage].forEach(item => { item.category = "seikatsu"; selSeikatsuGrid.appendChild(makeSelPaletteCard(item)); });
 }
 renderSelSeikatsuGrid(selCurrentStage);
 
@@ -831,8 +862,11 @@ selPickBack.addEventListener("click", () => {
 });
 
 /* ③ えらんだ イラストだけを おおきく ひょうじ */
+let selDisplayEntries = []; // { item, el } の たいおうを おぼえておく
+
 function showSelDisplayView(){
   selDisplayGrid.innerHTML = "";
+  selDisplayEntries = [];
   selChosenItems.forEach(item => {
     const card = document.createElement("div");
     card.className = "sel-display-item";
@@ -841,10 +875,10 @@ function showSelDisplayView(){
       <div class="label">${item.name}</div>
     `;
     card.addEventListener("click", () => {
-      document.querySelectorAll(".sel-display-item").forEach(el => el.classList.remove("chosen"));
-      card.classList.add("chosen");
+      card.classList.toggle("chosen");
     });
     selDisplayGrid.appendChild(card);
+    selDisplayEntries.push({ item, el: card });
   });
   selPickView.classList.add("hidden-mode");
   selDisplayView.classList.remove("hidden-mode");
@@ -855,6 +889,26 @@ selNextBtn.addEventListener("click", () => {
   clearSelChoices();
   selDisplayView.classList.add("hidden-mode");
   selCountView.classList.remove("hidden-mode");
+});
+
+/* 🎯 がっきの もくひょうへ：チェックが ついている イラストを
+   もくひょうボードの「せいかつ／がくしゅう」に ながしこみ、
+   そのまま もくひょうボードの がめんに きりかえる */
+selFlowBtn.addEventListener("click", () => {
+  const chosenEntries = selDisplayEntries.filter(e => e.el.classList.contains("chosen"));
+  if(chosenEntries.length === 0) return; // なにも えらばれていなければ なにもしない
+
+  chosenEntries.forEach(e => addToBoard(e.item, e.item.category));
+
+  // つぎの ラウンドの ために せんたくモードの じょうたいを リセット
+  clearSelChoices();
+  selDisplayView.classList.add("hidden-mode");
+  selCountView.classList.remove("hidden-mode");
+
+  // もくひょうボードの がめんへ じどうで きりかえる
+  selectionMode.classList.add("hidden-mode");
+  mainMode.classList.remove("hidden-mode");
+  modeToggleBtn.textContent = "🖐 せんたく モード";
 });
 
 /* せんたくモード ⇔ もくひょうボード モードの きりかえ */
