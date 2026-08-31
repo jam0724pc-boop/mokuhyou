@@ -188,7 +188,14 @@
     background: var(--color-board);
   }
 
-  #board-area h2{ text-align:center; font-size:18px; margin:4px 0 12px; color:#3E7C7C; }
+  #board-header{
+    display: flex; align-items: center; justify-content: center;
+    gap: 16px; flex-wrap: wrap; margin: 4px 0 12px;
+  }
+  #board-header h2{ margin: 0; }
+  #board-header #lock-btn{ font-size: 16px; padding: 10px 22px; }
+
+  #board-area h2{ text-align:center; font-size:18px; color:#3E7C7C; }
 
   /* ---------- せいかつ／がくしゅう それぞれの わく ---------- */
   .board-section{
@@ -270,11 +277,6 @@
   /* ============================================================
      ▼ フッター
   ============================================================ */
-  #footer-bar{
-    width: 100%; display:flex; justify-content:center; align-items:center; gap:20px;
-    padding: 10px 0; background:#FFF1DE; border-top: 4px dashed #FFD9B3;
-  }
-
   .big-btn{
     font-size: 20px; font-weight: bold; padding: 16px 34px; border:none;
     border-radius: 40px; color:#fff; box-shadow: 0 5px 0 rgba(0,0,0,0.15);
@@ -479,7 +481,10 @@
        ▼ もくひょうボード
   ============================================================ -->
   <div id="board-area">
-    <h2>がっきの もくひょう</h2>
+    <div id="board-header">
+      <h2>がっきの もくひょう</h2>
+      <button id="lock-btn" class="big-btn">✨ これで きまり！</button>
+    </div>
     <div id="lock-message">この がめんを みながら、かみと のりで つくってみよう！</div>
 
     <div class="board-section">
@@ -491,10 +496,6 @@
       <div class="board-section-label">がくしゅう</div>
       <div id="board-gakushu" class="board"></div>
     </div>
-  </div>
-
-  <div id="footer-bar">
-    <button id="lock-btn" class="big-btn">✨ これで きまり！</button>
   </div>
 
   <button id="unlock-btn" class="big-btn" style="position:fixed; bottom:8px; right:8px;">🔓 せんせいよう：やりなおす</button>
@@ -553,7 +554,7 @@
 
 <div id="modal-overlay">
   <div id="modal-box">
-    <p>けしますか？</p>
+    <p id="modal-message">けしますか？</p>
     <div id="modal-buttons">
       <button id="modal-yes" class="big-btn">けす</button>
       <button id="modal-no" class="big-btn">やめる</button>
@@ -661,7 +662,6 @@ const lockBtn         = document.getElementById("lock-btn");
 const unlockBtn       = document.getElementById("unlock-btn");
 
 let isLocked = false;
-let pendingDeleteEl = null;
 let currentStage = "seikatsu1";
 
 /* ----------------------------------------------------------------
@@ -723,21 +723,35 @@ function addToBoard(item, category){
 }
 
 /* ----------------------------------------------------------------
+   はんようの かくにん モーダル
+   showConfirm(メッセージ, おしたときの しょり) の かたちで つかう
+---------------------------------------------------------------- */
+const modalMessage = document.getElementById("modal-message");
+let pendingConfirmAction = null;
+
+function showConfirm(message, onConfirm){
+  modalMessage.textContent = message;
+  pendingConfirmAction = onConfirm;
+  modalOverlay.classList.add("show");
+}
+
+modalYes.addEventListener("click", () => {
+  if(pendingConfirmAction) pendingConfirmAction();
+  pendingConfirmAction = null;
+  modalOverlay.classList.remove("show");
+});
+modalNo.addEventListener("click", () => {
+  pendingConfirmAction = null;
+  modalOverlay.classList.remove("show");
+});
+
+/* ----------------------------------------------------------------
    ボードの イラストを タップ →「けしますか？」
 ---------------------------------------------------------------- */
 function askDelete(card){
   if(isLocked) return;
-  pendingDeleteEl = card;
-  modalOverlay.classList.add("show");
+  showConfirm("けしますか？", () => card.remove());
 }
-modalYes.addEventListener("click", () => {
-  if(pendingDeleteEl){ pendingDeleteEl.remove(); pendingDeleteEl = null; }
-  modalOverlay.classList.remove("show");
-});
-modalNo.addEventListener("click", () => {
-  pendingDeleteEl = null;
-  modalOverlay.classList.remove("show");
-});
 
 /* ----------------------------------------------------------------
    「✨ これで きまり！」→ ロック
@@ -749,10 +763,14 @@ lockBtn.addEventListener("click", () => {
 });
 
 /* せんせいよう：ロック かいじょ */
+/* せんせいよう：リセット（かくにんしてから もくひょうボードを からにする） */
 unlockBtn.addEventListener("click", () => {
-  isLocked = false;
-  document.body.classList.remove("locked");
-  document.querySelectorAll(".board-item").forEach(el => el.classList.remove("locked"));
+  showConfirm("もくひょうボードを リセットしますか？", () => {
+    boardSeikatsu.innerHTML = "";
+    boardGakushu.innerHTML = "";
+    isLocked = false;
+    document.body.classList.remove("locked");
+  });
 });
 
 /* ================================================================
